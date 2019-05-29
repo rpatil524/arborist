@@ -81,6 +81,14 @@ func parseResourcePath(r *http.Request) string {
 func (server *Server) MakeRouter(out io.Writer) http.Handler {
 	router := mux.NewRouter().StrictSlash(true)
 
+	swaggerUI := http.FileServer(http.Dir("docs"))
+	router.PathPrefix("/docs").Handler(http.StripPrefix("/docs", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/openapi.yaml" {
+			r.URL.Path = "/swagger-ui/" + r.URL.Path
+		}
+		swaggerUI.ServeHTTP(w, r)
+	}))).Methods("GET")
+
 	//router.Handle("/", server.handleRoot).Methods("GET")
 
 	router.HandleFunc("/health", server.handleHealth).Methods("GET")
@@ -137,8 +145,13 @@ func (server *Server) MakeRouter(out io.Writer) http.Handler {
 
 	// remove trailing slashes sent in URLs
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		r.URL.Path = strings.TrimSuffix(r.URL.Path, "/")
-		router.ServeHTTP(w, r)
+		if r.URL.Path == "/docs" {
+			// somehow StrictSlash is not working
+			http.Redirect(w, r, "/docs/", 301)
+		} else {
+			r.URL.Path = strings.TrimSuffix(r.URL.Path, "/")
+			router.ServeHTTP(w, r)
+		}
 	})
 
 	return handlers.CombinedLoggingHandler(out, handler)

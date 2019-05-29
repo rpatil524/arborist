@@ -6,6 +6,8 @@ info:
   license:
     name: 'Apache 2.0'
     url: 'https://github.com/uc-cdis/arborist'
+servers:
+  - url: /arborist
 tags:
   - name: auth
     description: make requests to determine authorization
@@ -862,6 +864,466 @@ paths:
           description: successfully revoked
         404:
           description: group not found
+
+  /credentials/api/access_token:
+    post:
+      tags:
+        - fence
+      summary: Receive access token when given API key
+      description: >-
+        Get a new temporary access token for the current user by providing a
+        valid API key.
+      servers:
+        - url: /user
+      operationId: getAccessToken
+      responses:
+        '200':
+          description: Access token
+          content:
+            '*/*':
+              schema:
+                type: object
+                properties:
+                  access_token:
+                    type: string
+                    description: JWT access token
+                example:
+                  access_token: >-
+                    eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.XbPfbIHMI6arZ3Y922BhjWgQzWXcXNrz0ogtVhfEd2o
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                api_key:
+                  type: string
+                  description: JWT representing API key
+              example:
+                api_key: >-
+                  eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.XbPfbIHMI6arZ3Y922BhjWgQzWXcXNrz0ogtVhfEd2o
+        description: API key
+        required: true
+  /oauth2/authorize:
+    get:
+      tags:
+        - fence
+      summary: Perform OAuth2 authorization
+      description: >-
+        Obtain an authorization grant through the OAuth2 protocol. To handle
+        this request, render a page for the user to confirm the OAuth2 grant
+        (through e.g. Google). Redirect user to `redirect_uri` with an added
+        `code` parameter obtained from the authorization provider.
+      operationId: authorize
+      servers:
+        - url: /user
+      parameters:
+        - name: client_id
+          required: true
+          in: query
+          description: 'The client''s ID, issued by authorization server'
+          schema:
+            type: string
+        - name: response_type
+          required: true
+          in: query
+          description: >-
+            For an authorization request using the access code flow, the
+            response type must be "code". If this is missing from the request
+            then the authorization server must return an error.
+          schema:
+            type: string
+          example: code
+        - name: redirect_uri
+          required: true
+          in: query
+          description: Page to redirect to after access has been granted
+          schema:
+            type: string
+          example: https://qa-dcfdemo.planx-pla.net/arborist/docs/oauth2-redirect.html
+        - name: scope
+          required: false
+          in: query
+          description: |
+            Requested authorization scope
+            > NOTE: This is required for [OIDC](http://openid.net/specs/openid-connect-core-1_0.html#AuthRequest)
+          schema:
+            type: string
+          example: openid+user+data
+          allowReserved: true
+      responses:
+        '200':
+          description: successful operation
+  /oauth2/token:
+    post:
+      tags:
+        - fence
+      summary: Exchange code for or refresh the access token.
+      description: >-
+        Exchange the `code` obtained from OAuth2 for an access token, or refresh
+        the access token using a refresh token.
+      operationId: token
+      servers:
+        - url: /user
+      responses:
+        '200':
+          description: successful operation
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                grant_type:
+                  description: >-
+                    Value MUST be `"authorization_code"` (which is the
+                    authorization flow used in this implementation)
+                  type: string
+                  example: authorization_code
+                code:
+                  description: >-
+                    The authorization code returned from the OAuth2
+                    authorization request
+                  type: string
+                redirect_uri:
+                  description: >-
+                    Must be identical to the `"redirect_uri"` included in the
+                    original authorization request
+                  type: string
+                  example: https://qa-dcfdemo.planx-pla.net/arborist/docs/oauth2-redirect.html
+                client_id:
+                  type: string
+                client_secret:
+                  type: string
+              required:
+                - grant_type
+                - code
+                - redirect_uri
+                - client_id
+                - client_secret
+  '/data/download/{file_id}':
+    get:
+      tags:
+        - fence
+      summary: Create a signed URL for data download given a file_id
+      description: Allow users to get a signed URL for a data file.
+      servers:
+        - url: /user
+      operationId: downloadSignedURL
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: file_id
+          required: true
+          in: path
+          description: data UUID
+          schema:
+            type: string
+        - name: protocol
+          required: false
+          in: query
+          description: >-
+            a protocol provided by storage provider, e.g. http, ftp, s3, gs
+          schema:
+            type: string
+            enum:
+              - http
+              - s3
+              - gs
+        - name: expires_in
+          required: false
+          in: query
+          description: >-
+            the time (in seconds) in which return url is valid. Must be less
+            than the configured maximum (default is 3600). If it's greater,
+            the configured maximum will be used.
+          schema:
+            type: integer
+        - name: redirect
+          required: false
+          in: query
+          description: >-
+            if set, then a redirect to the signed url will be sent.
+            Otherwise, json data with the url is returned.
+          schema:
+            type: boolean
+        - name: no_force_sign
+          required: false
+          in: query
+          description: >-
+            if `no_force_sign=True` and the file requested is actually public, this will
+            request to *not* sign the resulting URL (i.e. just provide the
+            public url without using anonymous signing creds).
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: successful operation
+          content:
+            '*/*':
+              schema:
+                type: object
+                properties:
+                  url:
+                    type: string
+                    description: the signed url issued to
+        '400':
+          description: 'Invalid input: UUID not found or invalid location'
+  '/index':
+    post:
+      tags:
+        - indexd
+      summary: Add a new entry to the index
+      description: ''
+      servers:
+        - url: /index
+      operationId: addEntry
+      requestBody:
+        description: Metadata object that needs to be added to the store. Providing at least one hash is necessary and sufficient.
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - size
+                - hashes
+                - urls
+                - form
+              properties:
+                did:
+                  $ref: "#/definitions/DID"
+                baseid:
+                  $ref: "#/definitions/UUID"
+                form:
+                  type: string
+                  description: how the entry was submitted to storage
+                  enum:
+                    - object
+                    - container
+                    - multipart
+                size:
+                  type: integer
+                  format: int64
+                  description: size in bytes
+                file_name:
+                  type: string
+                metadata:
+                  type: object
+                urls_metadata:
+                  type: object
+                version:
+                  type: string
+                urls:
+                  type: array
+                  items:
+                    type: string
+                acl:
+                  type: array
+                  items:
+                    type: string
+                authz:
+                  type: array
+                  items:
+                    type: string
+                hashes:
+                  $ref: '#/definitions/HashInfo'
+      responses:
+        '200':
+          description: successful operation
+          schema:
+            $ref: '#/definitions/OutputRef'
+        '400':
+          description: Invalid input
+      security:
+        - BearerAuth: []
+  '/index/{GUID}':
+    get:
+      tags:
+        - indexd
+      summary: Get the metadata associated with the given id
+      servers:
+        - url: /index
+      operationId: getEntry
+      produces:
+        - application/json
+      parameters:
+        - name: GUID
+          in: path
+          description: entry id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: successful operation
+          schema:
+            $ref: '#/definitions/OutputInfo'
+        '400':
+          description: Invalid status value
+      security: []
+    put:
+      tags:
+        - indexd
+      summary: Update an existing entry in the index
+      servers:
+        - url: /index
+      description: ''
+      operationId: updateEntry
+      consumes:
+        - application/json
+      produces:
+        - application/json
+      requestBody:
+        description: index record that needs to be updated
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/definitions/UpdateInputInfo'
+      parameters:
+        - name: GUID
+          in: path
+          description: entry id
+          required: true
+          schema:
+            type: string
+        - name: rev
+          in: query
+          description: data revision - simple consistency mechanism
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: success
+          schema:
+            $ref: '#/definitions/OutputRef'
+        '400':
+          description: Invalid input
+      security:
+        - BearerAuth: []
+
+
+definitions:
+  DID:
+    type: string
+    pattern: >-
+      ^.*[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}$
+  UUID:
+    type: string
+    pattern: >-
+      ^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}$
+  HashInfo:
+    type: object
+    properties:
+      md5:
+        type: string
+        pattern: '^[0-9a-f]{32}$'
+      sha:
+        type: string
+        pattern: '^[0-9a-f]{40}$'
+      sha256:
+        type: string
+        pattern: '^[0-9a-f]{64}$'
+      sha512:
+        type: string
+        pattern: '^[0-9a-f]{128}$'
+      crc:
+        type: string
+        pattern: '^[0-9a-f]{8}$'
+      etag:
+        type: string
+        pattern: '^[0-9a-f]{32}(-\d+)?$'
+  OutputRef:
+    type: object
+    properties:
+      did:
+        $ref: "#/definitions/DID"
+      baseid:
+        $ref: "#/definitions/UUID"
+      rev:
+        type: string
+        pattern: '^[0-9a-f]{8}$'
+  OutputInfo:
+    type: object
+    properties:
+      did:
+        $ref: "#/definitions/DID"
+      baseid:
+        $ref: "#/definitions/UUID"
+      rev:
+        type: string
+        pattern: '^[0-9a-f]{8}$'
+      form:
+        type: string
+        description: how the entry was submitted to storage
+        enum:
+          - object
+          - container
+          - multipart
+      size:
+        type: integer
+        format: int64
+        description: size in bytes
+      file_name:
+        type: string
+      version:
+        type: string
+      uploader:
+        type: string
+      urls:
+        type: array
+        items:
+          type: string
+      acl:
+        type: array
+        items:
+          type: string
+      authz:
+        type: array
+        items:
+          type: string
+      hashes:
+        $ref: '#/definitions/HashInfo'
+      updated_date:
+        type: string
+        format: date-time
+        description: last updated time
+      created_date:
+        type: string
+        format: date-time
+        description: time created
+      metadata:
+        type: object
+        description: user defined optional metadata
+      urls_metadata:
+        type: object
+        description: url level optional metadata
+  UpdateInputInfo:
+    type: object
+    properties:
+      file_name:
+        type: string
+      metadata:
+        type: object
+      urls_metadata:
+        type: object
+      version:
+        type: string
+      urls:
+        type: array
+        items:
+          type: string
+      acl:
+        type: array
+        items:
+          type: string
+      authz:
+        type: array
+        items:
+          type: string
+
 components:
   schemas:
     AuthRequestBody:
@@ -1187,3 +1649,7 @@ components:
           items:
             type: string
             example: 'policy'
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
