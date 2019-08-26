@@ -142,6 +142,19 @@ func (server *Server) MakeRouter(out io.Writer) http.Handler {
 		router.ServeHTTP(w, r)
 	})
 
+	authHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		jwt = r.Header
+		// parse jwt
+		// get username
+		r.URL // "/resource/a/b/c"
+		r.Method // GET
+		errResponse := checkAuth(r.URL, r.method, username)
+		if errResponse != nil {
+			// user is unauthorized
+		}
+		router.ServeHTTP(w, r)
+	}
+
 	return handlers.CombinedLoggingHandler(out, handler)
 }
 
