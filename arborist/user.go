@@ -13,6 +13,7 @@ import (
 type PolicyBinding struct {
 	Policy    string  `json:"policy"`
 	ExpiresAt *string `json:"expires_at"`
+	AuthzProvider *string `json:"authz_provider"`
 }
 
 type User struct {
@@ -153,7 +154,7 @@ func listUsersFromDb(db *sqlx.DB) ([]UserFromQuery, error) {
 			usr.email,
 			array_remove(array_agg(DISTINCT grp.name), NULL) AS groups,
 			(
-				SELECT json_agg(json_build_object('policy', policy.name, 'expires_at', usr_policy.expires_at))
+				SELECT json_agg(json_build_object('policy', policy.name, 'expires_at', usr_policy.expires_at, 'authz_provider', usr_policy.authz_provider))
 				FROM usr_policy
 				INNER JOIN policy ON policy.id = usr_policy.policy_id
 				WHERE usr_policy.usr_id = usr.id
