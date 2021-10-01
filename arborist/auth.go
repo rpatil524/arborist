@@ -53,10 +53,17 @@ func (requestJSON *AuthRequestJSON_User) UnmarshalJSON(data []byte) error {
 
 type Constraints = map[string]string
 
+// type AuthRequestJSON_Request struct {
+// 	Resource    string      `json:"resource"`
+// 	Action      Action      `json:"action"`
+// 	Constraints Constraints `json:"constraints,omitempty"`
+// }
 type AuthRequestJSON_Request struct {
+	Authz	AuthRequestJSON_Request_Authz	`json:"authz"`
+	Actions	[]Action						`json:"actions"`
+	// for backwards compatiblity:
 	Resource    string      `json:"resource"`
 	Action      Action      `json:"action"`
-	Constraints Constraints `json:"constraints,omitempty"`
 }
 
 // UnmarshalJSON defines the deserialization from JSON into an AuthRequestJSON
@@ -71,8 +78,53 @@ func (requestJSON *AuthRequestJSON_Request) UnmarshalJSON(data []byte) error {
 
 	optionalFieldsPath := map[string]struct{}{
 		"constraints": struct{}{},
+		"resource": struct{}{},
+		"action": struct{}{},
 	}
-	err = validateJSON("auth request", requestJSON, fields, optionalFieldsPath)
+	// TODO validate json with new/old `fields` instead, since the fields are not really "optional", they just should not be there
+	err = validateJSON("auth request 'request' field", requestJSON, fields, optionalFieldsPath)
+	if err != nil {
+		// fallback to the old logic
+		optionalFieldsPath = map[string]struct{}{
+			"constraints": struct{}{},
+			"authz": struct{}{},
+			"actions": struct{}{},
+		}
+		errBackComp := validateJSON("auth request 'request' field", requestJSON, fields, optionalFieldsPath)
+		if errBackComp != nil {
+			return err // return the error related to the new logic
+		}
+	}
+
+	// Trick to use `json.Unmarshal` inside here, making a type alias which we
+	// cast the AuthRequestJSON to.
+	type loader AuthRequestJSON_Request
+	err = json.Unmarshal(data, (*loader)(requestJSON))
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+type AuthRequestJSON_Request_Authz struct {
+	Version	string	`json:"version"`
+	Logic	string	`json:"logic"` // TODO not a string
+}
+
+func (requestJSON *AuthRequestJSON_Request_Authz) UnmarshalJSON(data []byte) error {
+	fields := make(map[string]interface{})
+	err := json.Unmarshal(data, &fields)
+	if err != nil {
+		return err
+	}
+
+	// optionalFieldsPath := map[string]struct{}{
+	// 	"constraints": struct{}{},
+	// 	"resource": struct{}{},
+	// 	"action": struct{}{},
+	// }
+	err = validateJSON("auth request 'request' field", requestJSON, fields, nil)
 	if err != nil {
 		return err
 	}
@@ -305,7 +357,8 @@ func authorizeUser(request *AuthRequest) (*AuthResponse, error) {
 	if err != nil {
 		return nil, err
 	}
-	result := len(authorized) > 0 && authorized[0]
+	// result := len(authorized) > 0 && authorized[0]
+	result := true // TODO remove this
 	return &AuthResponse{result}, nil
 }
 

@@ -402,6 +402,21 @@ func (server *Server) handleAuthRequest(w http.ResponseWriter, r *http.Request, 
 		policies = authRequestJSON.User.Policies
 	}
 
+	useDeprecatedLogic := true
+	server.logger.Debug("   DEBUG: %#v", authRequestJSON.Request.Authz.Version)
+	if authRequestJSON.Request != nil && &authRequestJSON.Request.Authz != nil && authRequestJSON.Request.Authz.Version != "" {
+		server.logger.Debug("     in `if`")
+		useDeprecatedLogic = false
+		if authRequestJSON.Requests != nil || &authRequestJSON.Request.Resource != nil || &authRequestJSON.Request.Action != nil {
+			msg := "`request.authz` cannot be used at the same time as `requests` or `request.resource` or `request.action`"
+			server.logger.Info("tried to handle auth request but input was invalid: %s", msg)
+			response := newErrorResponse(msg, 400, nil)
+			_ = response.write(w, r)
+			return
+		}
+	}
+	server.logger.Debug("useDeprecatedLogic: %b", useDeprecatedLogic)
+
 	requests := []AuthRequestJSON_Request{}
 	if authRequestJSON.Request != nil {
 		requests = append(requests, *authRequestJSON.Request)

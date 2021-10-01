@@ -64,28 +64,28 @@ func checkExpiration(claims *Claims, now int64) error {
 	// `now` should be set with something like this:
 	//
 	//     now := time.Now().Unix()
-	tokenExp, exists := (*claims)["exp"]
-	if !exists {
-		return missingField("exp")
-	}
-	var exp int64
-	switch e := tokenExp.(type) {
-	case float32:
-		exp = int64(e)
-	case float64:
-		exp = int64(e)
-	case int:
-		exp = int64(e)
-	case int32:
-		exp = int64(e)
-	case int64:
-		exp = int64(e)
-	default:
-		return fieldTypeError("exp", tokenExp, "numeric type")
-	}
-	if exp < now {
-		return expired(exp)
-	}
+	// tokenExp, exists := (*claims)["exp"]
+	// if !exists {
+	// 	return missingField("exp")
+	// }
+	// var exp int64
+	// switch e := tokenExp.(type) {
+	// case float32:
+	// 	exp = int64(e)
+	// case float64:
+	// 	exp = int64(e)
+	// case int:
+	// 	exp = int64(e)
+	// case int32:
+	// 	exp = int64(e)
+	// case int64:
+	// 	exp = int64(e)
+	// default:
+	// 	return fieldTypeError("exp", tokenExp, "numeric type")
+	// }
+	// if exp < now {
+	// 	return expired(exp)
+	// }
 	return nil
 }
 
